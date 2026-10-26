@@ -38,10 +38,18 @@ $$;
 -- What the Storage API does for a download, reduced to the access decision. Supabase's docs: a public
 -- bucket "effectively bypasses access controls for both retrieving and serving files", so anyone with the
 -- URL gets the file; a private bucket serves it only if the caller's RLS policies let them select the row.
+create function storage.object_exists(bucket text, path text) returns boolean language sql stable security definer
+  set search_path = '' as $$
+  select exists (select 1 from storage.objects where bucket_id = bucket and name = path)
+$$;
+-- The Storage service's own lookup, used by can_download below (not part of Supabase's SQL API).
+revoke execute on function storage.object_exists(text, text) from public;
+grant execute on function storage.object_exists(text, text) to anon, authenticated;
 create function storage.can_download(bucket text, path text) returns boolean language plpgsql security invoker as $$
 begin
   if (select public from storage.buckets where id = bucket) then
-    return true;
+    -- Served to anyone, policies or not, if the file exists (a missing file is a 404).
+    return storage.object_exists(bucket, path);
   end if;
   return exists (select 1 from storage.objects where bucket_id = bucket and name = path);
 end $$;

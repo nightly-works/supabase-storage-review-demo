@@ -5,7 +5,7 @@ A proof piece for security reviews of apps built with AI app builders, on the pa
 | # | Flaw | Severity | Fix |
 |---|---|---|---|
 | 1 | ID scans and payslips in a public bucket: anyone with a file's address downloads it, policies or not | high | private bucket, signed URLs |
-| 2 | The read policy checks the bucket only: every tenant lists and downloads every document | high | own folder, `storage.foldername(name)[1] = auth.uid()` |
+| 2 | The read policy checks the bucket only: every tenant lists and downloads every document | high | own folder, `(storage.foldername(name))[1] = (select auth.uid()::text)` |
 | 3 | The delete policy checks the bucket only: every tenant deletes every document | high | own folder |
 | 4 | Avatar upload and replace check the bucket only: anyone replaces anyone's avatar | medium | own folder on insert, and on update both `using` and `with check` |
 

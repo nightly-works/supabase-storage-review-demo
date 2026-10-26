@@ -26,8 +26,14 @@ select set_config('request.jwt.claims', json_build_object('sub', :'alice')::text
 set role authenticated;
 select pg_temp.verdict(2, 'signed-in tenant listing another tenant''s documents',
   exists (select 1 from storage.objects where bucket_id = 'documents' and name like :'bob' || '/%'));
+select pg_temp.verdict(2, 'signed-in tenant downloading another tenant''s ID scan',
+  storage.can_download('documents', :'bob' || '/id-scan.jpg'));
 
--- 3. Alice deletes Bob's ID scan.
+-- 3. Alice deletes Bob's ID scan. A delete must also pass the read policies, so fix 2 alone would stop
+-- this one: the delete policy itself is checked too, for an own-folder condition.
+select pg_temp.verdict(3, 'delete policy without an own-folder condition',
+  not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
+              and cmd = 'DELETE' and qual like '%foldername%'));
 with gone as (delete from storage.objects where bucket_id = 'documents' and name = :'bob' || '/id-scan.jpg' returning 1)
 select pg_temp.verdict(3, 'deleting another tenant''s document', exists (select 1 from gone));
 
@@ -45,5 +51,13 @@ begin
     worked := false;
   end;
   perform pg_temp.verdict(4, 'uploading into another user''s avatar folder', worked);
+  worked := true;
+  begin
+    update storage.objects set name = '00000000-0000-0000-0000-00000000000b/moved.png'
+      where bucket_id = 'avatars' and name = '00000000-0000-0000-0000-00000000000a/avatar.png';
+  exception when insufficient_privilege then
+    worked := false;
+  end;
+  perform pg_temp.verdict(4, 'moving one''s own avatar into another user''s folder', worked);
 end $$;
 reset role;

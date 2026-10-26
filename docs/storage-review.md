@@ -8,14 +8,14 @@
 
 ## Summary for the owner
 
-Anyone on the internet who has, or guesses, a file's address can download a tenant's ID scan: the documents bucket is public. Signed in, any tenant can list and download every other tenant's documents and delete them, and can replace anyone's avatar. The fixes are policies and one bucket setting; the app's code changes in one place: document links become signed URLs that expire.
+Anyone on the internet who has a file's address, or a user id to build it from, can download a tenant's ID scan: the documents bucket is public. Signed in, any tenant can list and download every other tenant's documents and delete them, and can replace anyone's avatar. The fixes are policies and one bucket setting; the app's code changes in one place: document links become signed URLs that expire.
 
 ## Findings
 
 ### 1. ID scans and payslips are in a public bucket (high)
 
 **What**: the `documents` bucket is public. Supabase's documentation: a public bucket "effectively bypasses access controls for both retrieving and serving files", so "anyone who possesses the asset URL" gets the file, whatever the policies say.
-**Impact**: file addresses follow `<user id>/id-scan.jpg`; anyone holding one tenant's link, or a user id from elsewhere in the app, downloads identity documents without signing in.
+**Impact**: file addresses follow `<user id>/id-scan.jpg`; anyone holding one tenant's link, or a user id from elsewhere in the app, downloads identity documents without signing in. User ids are easy to collect here: any signed-in user can list the avatars bucket, whose folders are named after them.
 **Fix**: the bucket is private. The app shows documents through `createSignedUrl()` links that expire, or downloads them with the user's session; both go through the policies.
 **Verified**: a request without a session cannot download another tenant's ID scan (attack 1).
 
@@ -31,14 +31,14 @@ Anyone on the internet who has, or guesses, a file's address can download a tena
 **What**: the `documents delete` policy also checks the bucket only.
 **Impact**: any account erases other tenants' files, the landlord's evidence included.
 **Fix**: the same own-folder condition on delete.
-**Verified**: deleting Bob's ID scan as Alice affects no row (attack 3).
+**Verified**: deleting Bob's ID scan as Alice affects no row (attack 3). The read fix already blocks this, because a delete must also pass the read policies; the delete policy is fixed so it holds on its own, and the test checks it has the own-folder condition.
 
 ### 4. Anyone can replace anyone's avatar (medium)
 
 **What**: the avatar insert and update policies check the bucket only.
 **Impact**: a user replaces another user's avatar shown next to their messages (impersonation, offensive images), or fills other users' folders.
 **Fix**: own-folder condition on insert, and on update both on the row targeted (`using`) and on the row written (`with check`), so a file cannot be moved into another folder either. The bucket stays public: avatars are meant to be seen.
-**Verified**: replacing Bob's avatar and uploading into his folder are refused (attack 4); Alice still uploads and replaces her own (normal use).
+**Verified**: replacing Bob's avatar, uploading into his folder and moving one's own avatar into it are refused (attack 4); Alice still uploads and replaces her own (normal use).
 
 ## Checked next in a full review
 
